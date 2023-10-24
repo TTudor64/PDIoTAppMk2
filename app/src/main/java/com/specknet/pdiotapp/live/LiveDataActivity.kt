@@ -359,7 +359,6 @@ class LiveDataActivity : AppCompatActivity() {
         looperRespeck.quit()
         looperThingy.quit()
         looperAnalysis.quit()
-        myHandler.looper.quit()
     }
 
 
