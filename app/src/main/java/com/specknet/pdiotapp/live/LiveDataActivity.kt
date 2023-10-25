@@ -39,7 +39,7 @@ class LiveDataActivity : AppCompatActivity() {
     lateinit var dataSet_thingy_accel_z: LineDataSet
 
 
-    var respeckBuffer = Array(100) { FloatArray(6) }
+    var respeckBuffer = Array(101) { FloatArray(6) }
     var time = 0f
     var buffertime = 0
     var outputString = "Please do activity for 4 seconds"
@@ -68,12 +68,12 @@ class LiveDataActivity : AppCompatActivity() {
 
         setupCharts()
         startUpdatingThread()
-        /**
+
         val tflite: Interpreter = try {
             Interpreter(loadModelFile())
         } catch (e: Exception) {
             throw RuntimeException(e)
-        }**/
+        }
 
         val textView: TextView = findViewById(R.id.analysisResult)
         textView.text = outputString
@@ -133,7 +133,7 @@ class LiveDataActivity : AppCompatActivity() {
                     val zg = liveData.gyro.z
 
                     // add data to current buffer array
-                    respeckBuffer[time.toInt()] = floatArrayOf(xa, ya, za, xg, yg, zg)
+                    respeckBuffer[buffertime.toInt()] = floatArrayOf(xa, ya, za, xg, yg, zg)
 
                     buffertime += 1
 
@@ -142,7 +142,7 @@ class LiveDataActivity : AppCompatActivity() {
                         Log.d("Live", "onReceive: analysis time")
                         buffertime = 0
                         //empty buffer
-                        respeckBuffer = Array(100) { FloatArray(6) }
+                        respeckBuffer = Array(101) { FloatArray(6) }
 
 
                     }
@@ -284,7 +284,9 @@ class LiveDataActivity : AppCompatActivity() {
     }
 
     private fun analyseData() {
-        // take the buffer and analyse it
+        // take the buffer and analyse it using tflite model
+
+        //output buffer of 2 ints
 
         // then update the text with the activity
         updateText()
@@ -299,7 +301,7 @@ class LiveDataActivity : AppCompatActivity() {
     }
 
     private fun loadModelFile(): MappedByteBuffer {
-        val fileDescriptor = assets.openFd("your_model_name.tflite")
+        val fileDescriptor = assets.openFd("respmodel.tflite")
         val inputStream = FileInputStream(fileDescriptor.fileDescriptor)
         val fileChannel = inputStream.channel
         val startOffset = fileDescriptor.startOffset
