@@ -39,7 +39,7 @@ class LiveDataActivity : AppCompatActivity() {
     lateinit var dataSet_thingy_accel_z: LineDataSet
 
 
-    var respeckBuffer = Array(101) { FloatArray(6) }
+    var respeckBuffer = Array(128) { FloatArray(6) }
     var time = 0f
     var buffertime = 0
     var outputString = "Please do activity for 4 seconds"
@@ -54,10 +54,11 @@ class LiveDataActivity : AppCompatActivity() {
     // global broadcast receiver so we can unregister it
     lateinit var respeckLiveUpdateReceiver: BroadcastReceiver
     lateinit var thingyLiveUpdateReceiver: BroadcastReceiver
-    lateinit var respeckAnalaysisReceiver: BroadcastReceiver
+    lateinit var respeckAnalysisReceiver: BroadcastReceiver
     lateinit var looperRespeck: Looper
     lateinit var looperAnalysis: Looper
     lateinit var looperThingy: Looper
+    lateinit var tflite: Interpreter
 
     val filterTestRespeck = IntentFilter(Constants.ACTION_RESPECK_LIVE_BROADCAST)
     val filterTestThingy = IntentFilter(Constants.ACTION_THINGY_BROADCAST)
@@ -110,7 +111,7 @@ class LiveDataActivity : AppCompatActivity() {
         val handlerRespeck = Handler(looperRespeck)
         this.registerReceiver(respeckLiveUpdateReceiver, filterTestRespeck, null, handlerRespeck)
 
-        respeckAnalaysisReceiver = object : BroadcastReceiver() {
+        respeckAnalysisReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
 
                 Log.i("thread", "I am running on thread = " + Thread.currentThread().name)
@@ -155,7 +156,7 @@ class LiveDataActivity : AppCompatActivity() {
         handlerAnalysisThread.start()
         looperAnalysis = handlerAnalysisThread.looper
         val handlerAnalysis = Handler(looperAnalysis)
-        this.registerReceiver(respeckAnalaysisReceiver, filterTestRespeck, null, handlerAnalysis)
+        this.registerReceiver(respeckAnalysisReceiver, filterTestRespeck, null, handlerAnalysis)
 
         // set up the broadcast receiver
         thingyLiveUpdateReceiver = object : BroadcastReceiver() {
@@ -284,11 +285,47 @@ class LiveDataActivity : AppCompatActivity() {
     }
 
     private fun analyseData() {
-        // take the buffer and analyse it using tflite model
+        // do analysis using tflite model
+        // input is array shape (101, 6)
+        // output is 2 integers, 1 for activity 1, 2 for respiratory condition.
 
-        //output buffer of 2 ints
+        val input = Array(3){respeckBuffer, fourierTransform, differentials}
 
-        // then update the text with the activity
+
+        val output = Array(2) {0}
+
+        tflite.run(input, output)
+
+        //translate 1st output to activity string.
+        var output1 = output[0]
+        var output2 = output[1]
+
+        val breathing = when (output1) {
+            0 -> "normal"
+            1 -> "coughing"
+            2 -> "hyperventilating"
+            3 -> "laughing"
+            4 -> "singing"
+            5 -> "talking"
+            6 -> "eating"
+            else -> "Invalid output"
+        }
+        val activity = when (output2) {
+            0 -> "ascending stairs"
+            1 -> "descending stairs"
+            2 -> "lying down back"
+            3 -> "lying down on left"
+            4 -> "lying down on stomach"
+            5 -> "lying down right"
+            6 -> "miscellaneous movements"
+            7 -> "normal walking"
+            8 -> "running"
+            9 -> "shuffle walking"
+            10 -> "sitting"
+            11 -> "standing"
+            else -> "Invalid output"
+        }
+        
         updateText()
     }
 
@@ -357,7 +394,7 @@ class LiveDataActivity : AppCompatActivity() {
         super.onDestroy()
         unregisterReceiver(respeckLiveUpdateReceiver)
         unregisterReceiver(thingyLiveUpdateReceiver)
-        unregisterReceiver(respeckAnalaysisReceiver)
+        unregisterReceiver(respeckAnalysisReceiver)
         looperRespeck.quit()
         looperThingy.quit()
         looperAnalysis.quit()
