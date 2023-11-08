@@ -25,6 +25,11 @@ import org.tensorflow.lite.Interpreter
 import java.io.FileInputStream
 import java.nio.MappedByteBuffer
 import java.nio.channels.FileChannel
+import org.apache.commons.math3.complex.Complex
+import org.apache.commons.math3.transform.DftNormalization
+import org.apache.commons.math3.transform.FastFourierTransformer
+import org.apache.commons.math3.transform.TransformType
+import kotlin.math.atan2
 
 
 class LiveDataActivity : AppCompatActivity() {
@@ -387,6 +392,24 @@ class LiveDataActivity : AppCompatActivity() {
                 }
             }
         }.start()
+    }
+
+    private fun fftAmplitudeAndPhase(input: Array<FloatArray>): Pair<Array<DoubleArray>, Array<DoubleArray>> {
+        val transformer = FastFourierTransformer(DftNormalization.STANDARD)
+        val amplitudes = Array(input[0].size) { DoubleArray(input.size) }
+        val phases = Array(input[0].size) { DoubleArray(input.size) }
+
+        for (i in 0 until input[0].size) {
+            val doubleArray = input.map { it[i].toDouble() }.toDoubleArray()
+            val complexResult = transformer.transform(doubleArray, TransformType.FORWARD)
+
+            for (j in complexResult.indices) {
+                amplitudes[i][j] = complexResult[j].abs()
+                phases[i][j] = atan2(complexResult[j].imaginary, complexResult[j].real)
+            }
+        }
+
+        return Pair(amplitudes, phases)
     }
 
 
