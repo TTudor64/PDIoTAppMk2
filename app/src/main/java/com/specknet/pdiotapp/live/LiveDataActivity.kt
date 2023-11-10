@@ -412,6 +412,38 @@ class LiveDataActivity : AppCompatActivity() {
         return Pair(amplitudes, phases)
     }
 
+    private fun differential(input: Array<FloatArray>): Array<FloatArray> {
+        val output = Array(input.size) { FloatArray(6) }
+
+        for (i in input.indices) {
+            for (j in -Constants.DERIVATIVE_SMOOTHING..Constants.DERIVATIVE_SMOOTHING) {
+                var clamped = i + j;
+
+                if (clamped < 0)
+                    clamped = 0
+                else if (clamped >= input.size)
+                    clamped = input.size - 1;
+
+                addTo(output[i], input[clamped]);
+            }
+
+            multiplyBy(output[i], 1f / (2 * Constants.DERIVATIVE_SMOOTHING + 1));
+        }
+
+        return output;
+    }
+
+    private fun addTo(modify: FloatArray, other: FloatArray) {
+        for (i in modify.indices) {
+            modify[i] += other[i];
+        }
+    }
+
+    private fun multiplyBy(modify: FloatArray, scalar: Float) {
+        for (i in modify.indices) {
+            modify[i] *= scalar;
+        }
+    }
 
     override fun onDestroy() {
         super.onDestroy()
