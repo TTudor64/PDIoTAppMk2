@@ -47,7 +47,7 @@ class LiveDataActivity : AppCompatActivity() {
     var respeckBuffer = Array(128) { FloatArray(6) }
     var time = 0f
     var buffertime = 0
-    var outputString = "Please do activity for 4 seconds"
+    private var outputString = "Please do activity for 4 seconds"
     private val myHandler = Handler(Looper.getMainLooper())
     lateinit var allRespeckData: LineData
 
@@ -73,9 +73,8 @@ class LiveDataActivity : AppCompatActivity() {
         setContentView(R.layout.activity_live_data)
 
         setupCharts()
-        startUpdatingThread()
 
-        val tflite: Interpreter = try {
+        tflite = try {
             Interpreter(loadModelFile())
         } catch (e: Exception) {
             throw RuntimeException(e)
@@ -143,12 +142,13 @@ class LiveDataActivity : AppCompatActivity() {
 
                     buffertime += 1
 
-                    if (buffertime >= 100) {
+                    if (buffertime >= 128) {
                         // do analysis
                         Log.d("Live", "onReceive: analysis time")
+                        analyseData()
                         buffertime = 0
                         //empty buffer
-                        respeckBuffer = Array(101) { FloatArray(6) }
+                        respeckBuffer = Array(128) { FloatArray(6) }
 
 
                     }
@@ -291,13 +291,27 @@ class LiveDataActivity : AppCompatActivity() {
 
     private fun analyseData() {
         // do analysis using tflite model
-        // input is array shape (101, 6)
-        // output is 2 integers, 1 for activity 1, 2 for respiratory condition.
 
-        val input = Array(3){respeckBuffer, fourierTransform, differentials}
+        //Generate fourier transformed data
+        val fourierTransform = fftAmplitudeAndPhase(respeckBuffer)
+
+        //Generate differentials
+        val differentials = differential(respeckBuffer)
+
+        val input = arrayOf(respeckBuffer,fourierTransform,differentials)
 
 
         val output = Array(2) {0}
+
+        val inputTensor = tflite.getInputTensor(0)
+
+        // Get input tensor details
+        val shape = inputTensor.shape()
+        val dataType = inputTensor.dataType()
+
+        // Print the details
+        println("Input tensor shape: ${shape.contentToString()}")
+        println("Input tensor data type: $dataType")
 
         tflite.run(input, output)
 
@@ -309,10 +323,7 @@ class LiveDataActivity : AppCompatActivity() {
             0 -> "normal"
             1 -> "coughing"
             2 -> "hyperventilating"
-            3 -> "laughing"
-            4 -> "singing"
-            5 -> "talking"
-            6 -> "eating"
+            3 -> "Laughing/Singing/Talking/Eating"
             else -> "Invalid output"
         }
         val activity = when (output2) {
@@ -326,19 +337,16 @@ class LiveDataActivity : AppCompatActivity() {
             7 -> "normal walking"
             8 -> "running"
             9 -> "shuffle walking"
-            10 -> "sitting"
-            11 -> "standing"
+            10 -> "Stationary"
             else -> "Invalid output"
         }
         
-        updateText()
+        updateText(breathing,activity)
     }
 
-    private fun updateText() {
+    private fun updateText(breathing: String, activity: String) {
         // update the text with the activity
-        val strings = arrayOf("Walking", "Sitting", "Standing")
-        val randomString = strings.random()
-        outputString = randomString
+        outputString = "Currently: $breathing and $activity"
         this.findViewById<TextView>(R.id.analysisResult).text = outputString
     }
 
@@ -382,34 +390,23 @@ class LiveDataActivity : AppCompatActivity() {
 
     }
 
-    private fun startUpdatingThread() {
-        Thread {
-            while (true) {
-                Thread.sleep(4000)
 
-                myHandler.post {
-                    analyseData()
-                }
-            }
-        }.start()
-    }
-
-    private fun fftAmplitudeAndPhase(input: Array<FloatArray>): Pair<Array<DoubleArray>, Array<DoubleArray>> {
+    private fun fftAmplitudeAndPhase(input: Array<FloatArray>): Array<Array<Pair<Double, Double>>> {
         val transformer = FastFourierTransformer(DftNormalization.STANDARD)
-        val amplitudes = Array(input[0].size) { DoubleArray(input.size) }
-        val phases = Array(input[0].size) { DoubleArray(input.size) }
+        val result = Array(input[0].size) { Array(input.size) { Pair(0.0, 0.0) } }
 
         for (i in 0 until input[0].size) {
             val doubleArray = input.map { it[i].toDouble() }.toDoubleArray()
             val complexResult = transformer.transform(doubleArray, TransformType.FORWARD)
 
             for (j in complexResult.indices) {
-                amplitudes[i][j] = complexResult[j].abs()
-                phases[i][j] = atan2(complexResult[j].imaginary, complexResult[j].real)
+                val amplitude = complexResult[j].abs()
+                val phase = atan2(complexResult[j].imaginary, complexResult[j].real)
+                result[i][j] = Pair(amplitude, phase)
             }
         }
 
-        return Pair(amplitudes, phases)
+        return result
     }
 
     private fun differential(input: Array<FloatArray>): Array<FloatArray> {
@@ -430,18 +427,18 @@ class LiveDataActivity : AppCompatActivity() {
             multiplyBy(output[i], 1f / (2 * Constants.DERIVATIVE_SMOOTHING + 1));
         }
 
-        return output;
+        return output
     }
 
     private fun addTo(modify: FloatArray, other: FloatArray) {
         for (i in modify.indices) {
-            modify[i] += other[i];
+            modify[i] += other[i]
         }
     }
 
     private fun multiplyBy(modify: FloatArray, scalar: Float) {
         for (i in modify.indices) {
-            modify[i] *= scalar;
+            modify[i] *= scalar
         }
     }
 
