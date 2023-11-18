@@ -74,15 +74,23 @@ class LiveDataActivity : AppCompatActivity() {
             throw RuntimeException(e)
         }
 
-        val inputTensor = tflite.getInputTensor(0)
+        val inputTensor1 = tflite.getInputTensor(0)
+        val inputTensor2 = tflite.getInputTensor(1)
+        val inputTensor3 = tflite.getInputTensor(2)
 
         // Get input tensor details
-        val shape = inputTensor.shape()
-        val dataType = inputTensor.dataType()
+        val shape1 = inputTensor1.shape()
+        val dataType1 = inputTensor1.dataType()
+
+        val shape2 = inputTensor2.shape()
+        val dataType2 = inputTensor2.dataType()
+
+        val shape3 = inputTensor3.shape()
+        val dataType3 = inputTensor3.dataType()
 
         // Print the details
-        println("Input tensor shape: ${shape.contentToString()}")
-        println("Input tensor data type: $dataType")
+        println("Input tensor shape: ${shape1.contentToString()}, ${shape2.contentToString()}, ${shape3.contentToString()}")
+        println("Input tensor data type: $dataType1 , $dataType2 , $dataType3")
 
         val textView: TextView = findViewById(R.id.analysisResult)
         textView.text = outputString
