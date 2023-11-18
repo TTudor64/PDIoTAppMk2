@@ -39,10 +39,6 @@ class LiveDataActivity : AppCompatActivity() {
     lateinit var dataSet_res_accel_y: LineDataSet
     lateinit var dataSet_res_accel_z: LineDataSet
 
-    lateinit var dataSet_thingy_accel_x: LineDataSet
-    lateinit var dataSet_thingy_accel_y: LineDataSet
-    lateinit var dataSet_thingy_accel_z: LineDataSet
-
 
     var respeckBuffer = Array(128) { FloatArray(6) }
     var time = 0f
@@ -54,11 +50,9 @@ class LiveDataActivity : AppCompatActivity() {
     lateinit var allThingyData: LineData
 
     lateinit var respeckChart: LineChart
-    lateinit var thingyChart: LineChart
 
     // global broadcast receiver so we can unregister it
     lateinit var respeckLiveUpdateReceiver: BroadcastReceiver
-    lateinit var thingyLiveUpdateReceiver: BroadcastReceiver
     lateinit var respeckAnalysisReceiver: BroadcastReceiver
     lateinit var looperRespeck: Looper
     lateinit var looperAnalysis: Looper
@@ -66,7 +60,7 @@ class LiveDataActivity : AppCompatActivity() {
     lateinit var tflite: Interpreter
 
     val filterTestRespeck = IntentFilter(Constants.ACTION_RESPECK_LIVE_BROADCAST)
-    val filterTestThingy = IntentFilter(Constants.ACTION_THINGY_BROADCAST)
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -79,6 +73,16 @@ class LiveDataActivity : AppCompatActivity() {
         } catch (e: Exception) {
             throw RuntimeException(e)
         }
+
+        val inputTensor = tflite.getInputTensor(0)
+
+        // Get input tensor details
+        val shape = inputTensor.shape()
+        val dataType = inputTensor.dataType()
+
+        // Print the details
+        println("Input tensor shape: ${shape.contentToString()}")
+        println("Input tensor data type: $dataType")
 
         val textView: TextView = findViewById(R.id.analysisResult)
         textView.text = outputString
@@ -146,9 +150,10 @@ class LiveDataActivity : AppCompatActivity() {
                         // do analysis
                         Log.d("Live", "onReceive: analysis time")
                         analyseData()
-                        buffertime = 0
+                        buffertime /= 2
                         //empty buffer
-                        respeckBuffer = Array(128) { FloatArray(6) }
+
+                        shiftBufferArray()
 
 
                     }
@@ -164,44 +169,14 @@ class LiveDataActivity : AppCompatActivity() {
         this.registerReceiver(respeckAnalysisReceiver, filterTestRespeck, null, handlerAnalysis)
 
         // set up the broadcast receiver
-        thingyLiveUpdateReceiver = object : BroadcastReceiver() {
-            override fun onReceive(context: Context, intent: Intent) {
-
-                Log.i("thread", "I am running on thread = " + Thread.currentThread().name)
-
-                val action = intent.action
-
-                if (action == Constants.ACTION_THINGY_BROADCAST) {
-
-                    val liveData =
-                        intent.getSerializableExtra(Constants.THINGY_LIVE_DATA) as ThingyLiveData
-                    Log.d("Live", "onReceive: liveData = " + liveData)
-
-                    // get all relevant intent contents
-                    val x = liveData.accelX
-                    val y = liveData.accelY
-                    val z = liveData.accelZ
-
-                    time += 1
-                    updateGraph("thingy", x, y, z)
-
-                }
-            }
-        }
 
         // register receiver on another thread
-        val handlerThreadThingy = HandlerThread("bgThreadThingyLive")
-        handlerThreadThingy.start()
-        looperThingy = handlerThreadThingy.looper
-        val handlerThingy = Handler(looperThingy)
-        this.registerReceiver(thingyLiveUpdateReceiver, filterTestThingy, null, handlerThingy)
 
     }
 
 
     fun setupCharts() {
         respeckChart = findViewById(R.id.respeck_chart)
-        thingyChart = findViewById(R.id.thingy_chart)
 
         // Respeck
         time = 0f
@@ -252,41 +227,7 @@ class LiveDataActivity : AppCompatActivity() {
         val entries_thingy_accel_y = ArrayList<Entry>()
         val entries_thingy_accel_z = ArrayList<Entry>()
 
-        dataSet_thingy_accel_x = LineDataSet(entries_thingy_accel_x, "Accel X")
-        dataSet_thingy_accel_y = LineDataSet(entries_thingy_accel_y, "Accel Y")
-        dataSet_thingy_accel_z = LineDataSet(entries_thingy_accel_z, "Accel Z")
 
-        dataSet_thingy_accel_x.setDrawCircles(false)
-        dataSet_thingy_accel_y.setDrawCircles(false)
-        dataSet_thingy_accel_z.setDrawCircles(false)
-
-        dataSet_thingy_accel_x.setColor(
-            ContextCompat.getColor(
-                this,
-                R.color.red
-            )
-        )
-        dataSet_thingy_accel_y.setColor(
-            ContextCompat.getColor(
-                this,
-                R.color.green
-            )
-        )
-        dataSet_thingy_accel_z.setColor(
-            ContextCompat.getColor(
-                this,
-                R.color.blue
-            )
-        )
-
-        val dataSetsThingy = ArrayList<ILineDataSet>()
-        dataSetsThingy.add(dataSet_thingy_accel_x)
-        dataSetsThingy.add(dataSet_thingy_accel_y)
-        dataSetsThingy.add(dataSet_thingy_accel_z)
-
-        allThingyData = LineData(dataSetsThingy)
-        thingyChart.data = allThingyData
-        thingyChart.invalidate()
     }
 
     private fun analyseData() {
@@ -373,19 +314,8 @@ class LiveDataActivity : AppCompatActivity() {
                 respeckChart.setVisibleXRangeMaximum(150f)
                 respeckChart.moveViewToX(respeckChart.lowestVisibleX + 40)
             }
-        } else if (graph == "thingy") {
-            dataSet_thingy_accel_x.addEntry(Entry(time, x))
-            dataSet_thingy_accel_y.addEntry(Entry(time, y))
-            dataSet_thingy_accel_z.addEntry(Entry(time, z))
-
-            runOnUiThread {
-                allThingyData.notifyDataChanged()
-                thingyChart.notifyDataSetChanged()
-                thingyChart.invalidate()
-                thingyChart.setVisibleXRangeMaximum(150f)
-                thingyChart.moveViewToX(thingyChart.lowestVisibleX + 40)
-            }
         }
+
 
 
     }
@@ -442,10 +372,15 @@ class LiveDataActivity : AppCompatActivity() {
         }
     }
 
+    private fun shiftBufferArray() {
+        for (i in 0 until respeckBuffer.size/2) {
+            respeckBuffer[i] = respeckBuffer[i + respeckBuffer.size/2]
+        }
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         unregisterReceiver(respeckLiveUpdateReceiver)
-        unregisterReceiver(thingyLiveUpdateReceiver)
         unregisterReceiver(respeckAnalysisReceiver)
         looperRespeck.quit()
         looperThingy.quit()

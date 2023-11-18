@@ -7,26 +7,35 @@
     tools:context=".live.LiveDataActivity">
 
     <LinearLayout
-        android:id="@+id/thingy_graphs"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:id="@+id/linearLayout"
+        android:layout_width="414dp"
+        android:layout_height="190dp"
         android:orientation="vertical"
-        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintBottom_toTopOf="@+id/respeck_graphs"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="0.0"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent">
 
         <TextView
+            android:id="@+id/textView"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Thingy Live Data" />
+            android:fontFamily="@font/droid_sans_bold"
+            android:text="Activity Reader:" />
 
-        <com.github.mikephil.charting.charts.LineChart
-            android:id="@+id/thingy_chart"
-            android:layout_width="match_parent"
-            android:layout_height="200dp" />
-
+        <TextView
+            android:id="@+id/analysisResult"
+            android:layout_width="382dp"
+            android:layout_height="155dp"
+            android:layout_marginBottom="124dp"
+            android:background="@drawable/rounded_rectangle"
+            android:fontFamily="@font/comic_neue_light"
+            android:text="TextView"
+            android:textAlignment="center"
+            android:textAppearance="@style/TextAppearance.AppCompat.Large"
+            android:textColor="#CABFBF"
+            android:textSize="34sp"
+            android:translationX="@dimen/activity_horizontal_margin" />
 
     </LinearLayout>
 
@@ -34,13 +43,14 @@
         android:id="@+id/respeck_graphs"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:layout_marginBottom="16dp"
         android:orientation="vertical"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="0.0"
+        app:layout_constraintHorizontal_bias="0.47"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_bias="0.039">
+        app:layout_constraintTop_toBottomOf="@+id/linearLayout">
 
         <TextView
             android:layout_width="wrap_content"
@@ -53,35 +63,6 @@
             android:layout_height="200dp" />
 
     </LinearLayout>
-
-    <TextView
-        android:id="@+id/analysisResult"
-        android:layout_width="306dp"
-        android:layout_height="155dp"
-        android:background="@drawable/rounded_rectangle"
-        android:fontFamily="@font/comic_neue_light"
-        android:text="TextView"
-        android:textAlignment="center"
-        android:textAppearance="@style/TextAppearance.AppCompat.Large"
-        android:textColor="#CABFBF"
-        android:textSize="34sp"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/thingy_graphs"
-        app:layout_constraintVertical_bias="0.656" />
-
-    <TextView
-        android:id="@+id/textView"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Activity Reader:"
-        app:layout_constraintBottom_toTopOf="@+id/analysisResult"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="0.067"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/thingy_graphs"
-        app:layout_constraintVertical_bias="0.476" />
 
 
 </androidx.constraintlayout.widget.ConstraintLayout>
