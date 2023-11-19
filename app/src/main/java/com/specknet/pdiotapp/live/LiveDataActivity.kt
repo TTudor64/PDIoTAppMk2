@@ -40,7 +40,7 @@ class LiveDataActivity : AppCompatActivity() {
     lateinit var dataSet_res_accel_z: LineDataSet
 
 
-    var respeckBuffer = Array(128) { FloatArray(6) }
+    var respeckBuffer = Array(75) { FloatArray(6) }
     var time = 0f
     var buffertime = 0
     private var outputString = "Please do activity for 4 seconds"
@@ -154,7 +154,7 @@ class LiveDataActivity : AppCompatActivity() {
 
                     buffertime += 1
 
-                    if (buffertime >= 128) {
+                    if (buffertime >= 75) {
                         // do analysis
                         Log.d("Live", "onReceive: analysis time")
                         analyseData()
