@@ -19,17 +19,17 @@ import com.github.mikephil.charting.data.LineDataSet
 import com.github.mikephil.charting.interfaces.datasets.ILineDataSet
 import com.specknet.pdiotapp.R
 import com.specknet.pdiotapp.utils.Constants
+import com.specknet.pdiotapp.utils.CsvReader
 import com.specknet.pdiotapp.utils.RESpeckLiveData
 import com.specknet.pdiotapp.utils.Utils
-import org.tensorflow.lite.Interpreter
-import java.io.FileInputStream
-import java.nio.MappedByteBuffer
-import java.nio.channels.FileChannel
 import org.apache.commons.math3.transform.DftNormalization
 import org.apache.commons.math3.transform.FastFourierTransformer
 import org.apache.commons.math3.transform.TransformType
+import org.tensorflow.lite.Interpreter
+import java.io.FileInputStream
 import java.nio.FloatBuffer
-import java.nio.IntBuffer
+import java.nio.MappedByteBuffer
+import java.nio.channels.FileChannel
 import kotlin.math.atan2
 
 
@@ -42,6 +42,8 @@ class LiveDataActivity : AppCompatActivity() {
     lateinit var dataSet_res_gyro_x: LineDataSet
     lateinit var dataSet_res_gyro_y: LineDataSet
     lateinit var dataSet_res_gyro_z: LineDataSet
+
+
 
     var respeckBuffer = Array(Constants.MODEL_INPUT_SIZE) { FloatArray(6) }
     var time = 0f
@@ -58,6 +60,13 @@ class LiveDataActivity : AppCompatActivity() {
     lateinit var respeckAnalysisReceiver: BroadcastReceiver
     lateinit var looperAnalysis: Looper
     lateinit var tflite: Interpreter
+
+    lateinit var rawMean : ArrayList<FloatArray>
+    lateinit var rawStd : ArrayList<FloatArray>
+    lateinit var fftMean : ArrayList<FloatArray>
+    lateinit var fftStd : ArrayList<FloatArray>
+    lateinit var diffMean : ArrayList<FloatArray>
+    lateinit var diffStd : ArrayList<FloatArray>
 
     val filterTestRespeck = IntentFilter(Constants.ACTION_RESPECK_LIVE_BROADCAST)
 
@@ -89,7 +98,13 @@ class LiveDataActivity : AppCompatActivity() {
         setContentView(R.layout.activity_live_data)
 
         setupCharts()
-
+        var csvReader = CsvReader(this)
+        rawMean = csvReader.readCsv("dm.csv")
+        rawStd = csvReader.readCsv("ds.csv")
+        fftMean = csvReader.readCsv("fm.csv")
+        fftStd = csvReader.readCsv("fs.csv")
+        diffMean = csvReader.readCsv("m.csv")
+        diffStd = csvReader.readCsv("s.csv")
         tflite = try {
             Interpreter(loadModelFile())
         } catch (e: Exception) {
@@ -270,6 +285,7 @@ class LiveDataActivity : AppCompatActivity() {
     }
 
     private fun breathingName(id: Int): String {
+        println("Output1 is : $id ")
         return when (id) {
             1 -> "Normal Breathing"
             2 -> "Coughing"
@@ -280,6 +296,7 @@ class LiveDataActivity : AppCompatActivity() {
     }
 
     private fun activityName(id: Int): String {
+        println("Output2 is : $id ")
         return when (id) {
             0 -> "ascending stairs"
             1 -> "descending stairs"
@@ -310,14 +327,40 @@ class LiveDataActivity : AppCompatActivity() {
         val input3 = FloatBuffer.allocate(differentials.size * differentials[0].size)
 
 
-        for (fa in respeckBuffer)
-            input1.put(fa)
+        var count = 0
+        for (fa in respeckBuffer) {
+            var tmpArray = FloatArray(6)
+            for (i in fa.indices) {
+                tmpArray[i] = normalizeValue(fa[i], rawMean[count][i], rawStd[count][i])
+            }
+            input1.put(tmpArray)
+            count++
+        }
+        count = 0
+        println(input1)
+        for (fa in fourierTransform) {
+            var tmpArray = FloatArray(6)
+            for (i in fa.indices) {
+                tmpArray[i] = normalizeValue(fa[i], fftMean[count][i], fftStd[count][i])
+            }
+            input2.put(tmpArray)
+            count++
+        }
 
-        for (fa in fourierTransform)
-            input2.put(fa)
 
-        for (fa in differentials)
-            input3.put(fa)
+        count = 0
+        for (fa in differentials) {
+            var tmpArray = FloatArray(6)
+            for (i in fa.indices) {
+                if(diffStd[count][i] == 0f)
+                    tmpArray[i] = 0f
+                else
+                    tmpArray[i] = normalizeValue(fa[i], diffMean[count][i], diffStd[count][i])
+            }
+            input3.put(tmpArray)
+            count++
+        }
+
 
 
         /*
@@ -342,7 +385,7 @@ class LiveDataActivity : AppCompatActivity() {
 
         //translate 1st output to activity string.
         val output1 = Utils.maxIndex(output[0] as FloatBuffer)
-        val output2 = Utils.maxIndex(output[1] as FloatBuffer)
+        val output2 = Utils.minIndex(output[1] as FloatBuffer)
 
         val breathing = breathingName(output1)
         val activity = activityName(output2)
@@ -470,7 +513,13 @@ class LiveDataActivity : AppCompatActivity() {
     }
 
     private fun normalizeValue(x: Float, mean: Float, std:Float) : Float {
-        return (x - mean) / std
+        if (std == 0f){
+            println("x = $x, mean = $mean, std = $std")
+            return 0f
+        }
+        else {
+            return (x - mean) / std
+        }
     }
 
     override fun onDestroy() {

@@ -133,4 +133,15 @@ public class Utils {
         return maxIndex;
     }
 
+    public static int minIndex(FloatBuffer buf) {
+        int minIndex = -1;
+        float minValue = Float.MAX_VALUE;
+
+        for (int i = 0; i < buf.limit(); i++)
+            if (buf.get(i) < minValue)
+                minValue = buf.get(minIndex = i);
+
+        return minIndex;
+    }
+
 }
