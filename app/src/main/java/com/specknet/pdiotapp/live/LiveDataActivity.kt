@@ -314,6 +314,7 @@ class LiveDataActivity : AppCompatActivity() {
     }
 
     private fun analyseData() {
+        var timeStart = System.currentTimeMillis()
         // do analysis using tflite model
 
         //Generate fourier transformed data
@@ -385,7 +386,7 @@ class LiveDataActivity : AppCompatActivity() {
 
         //translate 1st output to activity string.
         val output1 = Utils.maxIndex(output[0] as FloatBuffer)
-        val output2 = Utils.minIndex(output[1] as FloatBuffer)
+        val output2 = Utils.maxIndex(output[1] as FloatBuffer)
 
         val breathing = breathingName(output1)
         val activity = activityName(output2)
@@ -397,6 +398,7 @@ class LiveDataActivity : AppCompatActivity() {
             println("Probability of ${activityName(i)}: ${(output[1] as FloatBuffer).get(i)}")
 
         updateText(breathing,activity)
+        println("Analysis time: ${System.currentTimeMillis() - timeStart} ms")
     }
 
     private fun updateText(breathing: String, activity: String) {
