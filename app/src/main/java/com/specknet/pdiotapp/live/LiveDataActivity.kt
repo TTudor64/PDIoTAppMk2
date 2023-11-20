@@ -25,10 +25,11 @@ import org.tensorflow.lite.Interpreter
 import java.io.FileInputStream
 import java.nio.MappedByteBuffer
 import java.nio.channels.FileChannel
-import org.apache.commons.math3.complex.Complex
 import org.apache.commons.math3.transform.DftNormalization
 import org.apache.commons.math3.transform.FastFourierTransformer
 import org.apache.commons.math3.transform.TransformType
+import java.nio.FloatBuffer
+import java.nio.IntBuffer
 import kotlin.math.atan2
 
 
@@ -40,7 +41,7 @@ class LiveDataActivity : AppCompatActivity() {
     lateinit var dataSet_res_accel_z: LineDataSet
 
 
-    var respeckBuffer = Array(128) { FloatArray(6) }
+    var respeckBuffer = Array(Constants.MODEL_INPUT_SIZE) { FloatArray(6) }
     var time = 0f
     var buffertime = 0
     private var outputString = "Please do activity for 4 seconds"
@@ -52,7 +53,6 @@ class LiveDataActivity : AppCompatActivity() {
     lateinit var respeckChart: LineChart
 
     // global broadcast receiver so we can unregister it
-    lateinit var respeckLiveUpdateReceiver: BroadcastReceiver
     lateinit var respeckAnalysisReceiver: BroadcastReceiver
     lateinit var looperRespeck: Looper
     lateinit var looperAnalysis: Looper
@@ -61,6 +61,27 @@ class LiveDataActivity : AppCompatActivity() {
 
     val filterTestRespeck = IntentFilter(Constants.ACTION_RESPECK_LIVE_BROADCAST)
 
+    fun onReceiveRespeckDataFrame(xa: Float, ya: Float, za: Float, xg: Float, yg: Float, zg: Float) {
+
+        // Update graph
+        time += 1
+        updateGraph("respeck", xa, ya, za)
+
+        // add data to current buffer array
+        respeckBuffer[buffertime.toInt()] = floatArrayOf(xa, ya, za, xg, yg, zg)
+
+        buffertime += 1
+
+        if (buffertime >= Constants.MODEL_INPUT_SIZE) {
+            // do analysis
+            Log.d("Live", "onReceive: analysis time")
+            analyseData()
+            buffertime /= 2
+            //empty buffer
+
+            shiftBufferArray()
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -86,38 +107,6 @@ class LiveDataActivity : AppCompatActivity() {
 
         val textView: TextView = findViewById(R.id.analysisResult)
         textView.text = outputString
-        // set up the broadcast receiver
-        respeckLiveUpdateReceiver = object : BroadcastReceiver() {
-            override fun onReceive(context: Context, intent: Intent) {
-
-                Log.i("thread", "I am running on thread = " + Thread.currentThread().name)
-
-                val action = intent.action
-
-                if (action == Constants.ACTION_RESPECK_LIVE_BROADCAST) {
-
-                    val liveData =
-                        intent.getSerializableExtra(Constants.RESPECK_LIVE_DATA) as RESpeckLiveData
-                    Log.d("Live", "onReceive: liveData = " + liveData)
-
-                    // get all relevant intent contents
-                    val x = liveData.accelX
-                    val y = liveData.accelY
-                    val z = liveData.accelZ
-
-                    time += 1
-                    updateGraph("respeck", x, y, z)
-
-                }
-            }
-        }
-
-        // register receiver on another thread
-        val handlerThreadRespeck = HandlerThread("bgThreadRespeckLive")
-        handlerThreadRespeck.start()
-        looperRespeck = handlerThreadRespeck.looper
-        val handlerRespeck = Handler(looperRespeck)
-        this.registerReceiver(respeckLiveUpdateReceiver, filterTestRespeck, null, handlerRespeck)
 
         respeckAnalysisReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
@@ -141,23 +130,7 @@ class LiveDataActivity : AppCompatActivity() {
                     val yg = liveData.gyro.y
                     val zg = liveData.gyro.z
 
-                    // add data to current buffer array
-                    respeckBuffer[buffertime.toInt()] = floatArrayOf(xa, ya, za, xg, yg, zg)
-
-                    buffertime += 1
-
-                    if (buffertime >= 128) {
-                        // do analysis
-                        Log.d("Live", "onReceive: analysis time")
-                        analyseData()
-                        buffertime /= 2
-                        //empty buffer
-
-                        shiftBufferArray()
-
-
-                    }
-
+                    onReceiveRespeckDataFrame(xa, ya, za, xg, yg, zg)
                 }
             }
         }
@@ -239,10 +212,32 @@ class LiveDataActivity : AppCompatActivity() {
         //Generate differentials
         val differentials = differential(respeckBuffer)
 
-        val input = arrayOf(respeckBuffer,fourierTransform,differentials)
+        val input1 = FloatBuffer.allocate(respeckBuffer.size * respeckBuffer[0].size)
 
+        for (fa in respeckBuffer)
+            input1.put(fa)
 
-        val output = Array(2) {0}
+        input1.rewind()
+
+        val input2 = FloatBuffer.allocate(fourierTransform.size * respeckBuffer[0].size)
+
+        for (pa in fourierTransform)
+            for (f in pa)
+                input2.put(f.first.toFloat())
+
+        input2.rewind()
+
+        val input3 = FloatBuffer.allocate(differentials.size * differentials[0].size)
+
+        for (fa in differentials)
+            input3.put(fa)
+
+        input3.rewind()
+
+        val output = HashMap<Int, Any>()
+
+        output[0] = IntBuffer.allocate(1)
+        output[1] = IntBuffer.allocate(1)
 
         val inputTensor = tflite.getInputTensor(0)
 
@@ -254,11 +249,13 @@ class LiveDataActivity : AppCompatActivity() {
         println("Input tensor shape: ${shape.contentToString()}")
         println("Input tensor data type: $dataType")
 
-        tflite.run(input, output)
+        assert(shape.maxOrNull() == Constants.MODEL_INPUT_SIZE)
+
+        tflite.runForMultipleInputsOutputs(arrayOf(input1, input2, input3), output)
 
         //translate 1st output to activity string.
-        var output1 = output[0]
-        var output2 = output[1]
+        var output1 = (output[0] as IntBuffer).get(0)
+        var output2 = (output[1] as IntBuffer).get(0)
 
         val breathing = when (output1) {
             0 -> "normal"
@@ -380,7 +377,6 @@ class LiveDataActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        unregisterReceiver(respeckLiveUpdateReceiver)
         unregisterReceiver(respeckAnalysisReceiver)
         looperRespeck.quit()
         looperThingy.quit()

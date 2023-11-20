@@ -75,4 +75,5 @@ public class Constants {
 
     public static final int DERIVATIVE_SMOOTHING = 2;
 
+    public static final int MODEL_INPUT_SIZE = 75;
 }
