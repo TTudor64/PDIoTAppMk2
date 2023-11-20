@@ -39,6 +39,9 @@ class LiveDataActivity : AppCompatActivity() {
     lateinit var dataSet_res_accel_x: LineDataSet
     lateinit var dataSet_res_accel_y: LineDataSet
     lateinit var dataSet_res_accel_z: LineDataSet
+    lateinit var dataSet_res_gyro_x: LineDataSet
+    lateinit var dataSet_res_gyro_y: LineDataSet
+    lateinit var dataSet_res_gyro_z: LineDataSet
 
     var respeckBuffer = Array(Constants.MODEL_INPUT_SIZE) { FloatArray(6) }
     var time = 0f
@@ -60,9 +63,10 @@ class LiveDataActivity : AppCompatActivity() {
 
     fun onReceiveRespeckDataFrame(xa: Float, ya: Float, za: Float, xg: Float, yg: Float, zg: Float) {
 
+
         // Update graph
         time += 1
-        updateGraph("respeck", xa, ya, za)
+        updateGraph("respeck", xa, ya, za, xg,yg,zg)
 
         // add data to current buffer array
         respeckBuffer[buffertime.toInt()] = floatArrayOf(xa, ya, za, xg, yg, zg)
@@ -188,14 +192,25 @@ class LiveDataActivity : AppCompatActivity() {
         val entries_res_accel_x = ArrayList<Entry>()
         val entries_res_accel_y = ArrayList<Entry>()
         val entries_res_accel_z = ArrayList<Entry>()
+        val entries_res_gyro_x = ArrayList<Entry>()
+        val entries_res_gyro_y = ArrayList<Entry>()
+        val entries_res_gyro_z = ArrayList<Entry>()
 
         dataSet_res_accel_x = LineDataSet(entries_res_accel_x, "Accel X")
         dataSet_res_accel_y = LineDataSet(entries_res_accel_y, "Accel Y")
         dataSet_res_accel_z = LineDataSet(entries_res_accel_z, "Accel Z")
+        dataSet_res_gyro_x = LineDataSet(entries_res_gyro_x, "Gyro X")
+        dataSet_res_gyro_y = LineDataSet(entries_res_gyro_y, "Gyro Y")
+        dataSet_res_gyro_z = LineDataSet(entries_res_gyro_z, "Gyro Z")
+
 
         dataSet_res_accel_x.setDrawCircles(false)
         dataSet_res_accel_y.setDrawCircles(false)
         dataSet_res_accel_z.setDrawCircles(false)
+        dataSet_res_gyro_x.setDrawCircles(false)
+        dataSet_res_gyro_y.setDrawCircles(false)
+        dataSet_res_gyro_z.setDrawCircles(false)
+
 
         dataSet_res_accel_x.setColor(
             ContextCompat.getColor(
@@ -215,11 +230,32 @@ class LiveDataActivity : AppCompatActivity() {
                 R.color.blue
             )
         )
+        dataSet_res_gyro_x.setColor(
+            ContextCompat.getColor(
+                this,
+                R.color.purple
+            )
+        )
+        dataSet_res_gyro_y.setColor(
+            ContextCompat.getColor(
+                this,
+                R.color.cyan
+            )
+        )
+        dataSet_res_gyro_z.setColor(
+            ContextCompat.getColor(
+                this,
+                R.color.orange
+            )
+        )
 
         val dataSetsRes = ArrayList<ILineDataSet>()
         dataSetsRes.add(dataSet_res_accel_x)
         dataSetsRes.add(dataSet_res_accel_y)
         dataSetsRes.add(dataSet_res_accel_z)
+        dataSetsRes.add(dataSet_res_gyro_x)
+        dataSetsRes.add(dataSet_res_gyro_y)
+        dataSetsRes.add(dataSet_res_gyro_z)
 
         allRespeckData = LineData(dataSetsRes)
         respeckChart.data = allRespeckData
@@ -235,10 +271,10 @@ class LiveDataActivity : AppCompatActivity() {
 
     private fun breathingName(id: Int): String {
         return when (id) {
-            0 -> "normal"
-            1 -> "coughing"
-            2 -> "hyperventilating"
-            3 -> "Laughing/Singing/Talking/Eating"
+            1 -> "Normal Breathing"
+            2 -> "Coughing"
+            3 -> "Hyperventilating"
+            0 -> "Laughing/Singing/Talking/Eating"
             else -> "Invalid output"
         }
     }
@@ -249,8 +285,8 @@ class LiveDataActivity : AppCompatActivity() {
             1 -> "descending stairs"
             2 -> "lying down back"
             3 -> "lying down on left"
-            4 -> "lying down on stomach"
-            5 -> "lying down right"
+            4 -> "lying down on right"
+            5 -> "lying down on stomach"
             6 -> "miscellaneous movements"
             7 -> "normal walking"
             8 -> "running"
@@ -283,15 +319,14 @@ class LiveDataActivity : AppCompatActivity() {
         for (fa in differentials)
             input3.put(fa)
 
-        /*
 
+        /*
         for (j in respeckBuffer[0].indices)
             for (i in respeckBuffer.indices) {
                 input1.put(respeckBuffer[i][j])
                 input2.put(fourierTransform[i][j])
                 input3.put(differentials[i][j])
             }
-
         */
 
         input1.rewind()
@@ -335,13 +370,16 @@ class LiveDataActivity : AppCompatActivity() {
         val declaredLength = fileDescriptor.declaredLength
         return fileChannel.map(FileChannel.MapMode.READ_ONLY, startOffset, declaredLength)
     }
-    fun updateGraph(graph: String, x: Float, y: Float, z: Float) {
+    fun updateGraph(graph: String, x: Float, y: Float, z: Float, gyroX: Float, gyroY: Float, gyroZ: Float) {
         // take the first element from the queue
         // and update the graph with it
         if (graph == "respeck") {
             dataSet_res_accel_x.addEntry(Entry(time, x))
             dataSet_res_accel_y.addEntry(Entry(time, y))
             dataSet_res_accel_z.addEntry(Entry(time, z))
+            dataSet_res_gyro_x.addEntry(Entry(time, gyroX))
+            dataSet_res_gyro_y.addEntry(Entry(time, gyroY))
+            dataSet_res_gyro_z.addEntry(Entry(time, gyroZ))
 
             runOnUiThread {
                 allRespeckData.notifyDataChanged()
@@ -429,6 +467,10 @@ class LiveDataActivity : AppCompatActivity() {
         for (i in 0 until respeckBuffer.size/2) {
             respeckBuffer[i] = respeckBuffer[i + respeckBuffer.size/2]
         }
+    }
+
+    private fun normalizeValue(x: Float, mean: Float, std:Float) : Float {
+        return (x - mean) / std
     }
 
     override fun onDestroy() {
