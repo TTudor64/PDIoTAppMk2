@@ -74,6 +74,7 @@ public class Constants {
     public static final String THINGY_LIVE_DATA = "thingy_live_data";
 
     public static final int DERIVATIVE_SMOOTHING = 2;
-
     public static final int MODEL_INPUT_SIZE = 75;
+    public static final long IDEAL_MS_BETWEEN_FRAMES = 40;
+    public static final String TEST_DATA_FILE_NAME = "testdata.csv";
 }

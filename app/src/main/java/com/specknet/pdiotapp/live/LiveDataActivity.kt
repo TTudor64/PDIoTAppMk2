@@ -20,7 +20,7 @@ import com.github.mikephil.charting.interfaces.datasets.ILineDataSet
 import com.specknet.pdiotapp.R
 import com.specknet.pdiotapp.utils.Constants
 import com.specknet.pdiotapp.utils.RESpeckLiveData
-import com.specknet.pdiotapp.utils.ThingyLiveData
+import com.specknet.pdiotapp.utils.Utils
 import org.tensorflow.lite.Interpreter
 import java.io.FileInputStream
 import java.nio.MappedByteBuffer
@@ -53,9 +53,7 @@ class LiveDataActivity : AppCompatActivity() {
 
     // global broadcast receiver so we can unregister it
     lateinit var respeckAnalysisReceiver: BroadcastReceiver
-    lateinit var looperRespeck: Looper
     lateinit var looperAnalysis: Looper
-    lateinit var looperThingy: Looper
     lateinit var tflite: Interpreter
 
     val filterTestRespeck = IntentFilter(Constants.ACTION_RESPECK_LIVE_BROADCAST)
@@ -73,7 +71,7 @@ class LiveDataActivity : AppCompatActivity() {
 
         if (buffertime >= Constants.MODEL_INPUT_SIZE) {
             // do analysis
-            Log.d("Live", "onReceive: analysis time")
+            //Log.d("Live", "onReceive: analysis time")
             analyseData()
             buffertime /= 2
             //empty buffer
@@ -108,6 +106,11 @@ class LiveDataActivity : AppCompatActivity() {
         val shape3 = inputTensor3.shape()
         val dataType3 = inputTensor3.dataType()
 
+        assert(shape1.maxOrNull() == Constants.MODEL_INPUT_SIZE)
+
+        for (i in 0 until tflite.outputTensorCount)
+            println("Output tensor $i shape: ${tflite.getOutputTensor(i).shape().contentToString()}")
+
         // Print the details
         println("Input tensor shape: ${shape1.contentToString()}, ${shape2.contentToString()}, ${shape3.contentToString()}")
         println("Input tensor data type: $dataType1 , $dataType2 , $dataType3")
@@ -126,7 +129,7 @@ class LiveDataActivity : AppCompatActivity() {
 
                     val liveData =
                         intent.getSerializableExtra(Constants.RESPECK_LIVE_DATA) as RESpeckLiveData
-                    Log.d("Live", "onReceive: liveData = " + liveData)
+                    //Log.d("Live", "onReceive: liveData = " + liveData)
 
                     // get all relevant intent contents
                     val xa = liveData.accelX
@@ -148,10 +151,32 @@ class LiveDataActivity : AppCompatActivity() {
         val handlerAnalysis = Handler(looperAnalysis)
         this.registerReceiver(respeckAnalysisReceiver, filterTestRespeck, null, handlerAnalysis)
 
-        // set up the broadcast receiver
+        val testDataHandler = Handler(looperAnalysis)
+        testDataHandler.postDelayed(object : Runnable {
+            var testData: Array<FloatArray>? = null
+            var currentIndex: Int = 0
 
-        // register receiver on another thread
+            override fun run()  {
+                if (testData == null && time == 0f && assets.list("")!!.contains(Constants.TEST_DATA_FILE_NAME)) {
+                    val lines = assets.open(Constants.TEST_DATA_FILE_NAME).bufferedReader().useLines { it.filter { it != "" && it[0].isDigit() }.toList() }
+                    testData = Array(lines.size) {
+                        val entries = lines[it].split(",")
+                        val offset = entries.size - 6
+                        FloatArray(6) { entries[it + offset].trim().toFloat() }
+                    }
+                }
 
+                if (testData != null) {
+                    testDataHandler.postDelayed(this, Constants.IDEAL_MS_BETWEEN_FRAMES)
+
+                    val frame = testData!![currentIndex]
+                    onReceiveRespeckDataFrame(frame[0], frame[1], frame[2], frame[3], frame[4], frame[5])
+
+                    if (++currentIndex == testData!!.size)
+                        currentIndex = 0
+                }
+            }
+        }, 1000)
     }
 
 
@@ -206,72 +231,20 @@ class LiveDataActivity : AppCompatActivity() {
         val entries_thingy_accel_x = ArrayList<Entry>()
         val entries_thingy_accel_y = ArrayList<Entry>()
         val entries_thingy_accel_z = ArrayList<Entry>()
-
-
     }
 
-    private fun analyseData() {
-        // do analysis using tflite model
-
-        //Generate fourier transformed data
-        val fourierTransform = fftAmplitudeAndPhase(respeckBuffer)
-
-        //Generate differentials
-        val differentials = differential(respeckBuffer)
-
-        val input1 = FloatBuffer.allocate(respeckBuffer.size * respeckBuffer[0].size)
-
-        for (fa in respeckBuffer)
-            input1.put(fa)
-
-        input1.rewind()
-
-        val input2 = FloatBuffer.allocate(fourierTransform.size * respeckBuffer[0].size)
-
-        for (pa in fourierTransform)
-            for (f in pa)
-                input2.put(f.first.toFloat())
-
-        input2.rewind()
-
-        val input3 = FloatBuffer.allocate(differentials.size * differentials[0].size)
-
-        for (fa in differentials)
-            input3.put(fa)
-
-        input3.rewind()
-
-        val output = HashMap<Int, Any>()
-
-        output[0] = IntBuffer.allocate(1)
-        output[1] = IntBuffer.allocate(1)
-
-        val inputTensor = tflite.getInputTensor(0)
-
-        // Get input tensor details
-        val shape = inputTensor.shape()
-        val dataType = inputTensor.dataType()
-
-        // Print the details
-        println("Input tensor shape: ${shape.contentToString()}")
-        println("Input tensor data type: $dataType")
-
-        assert(shape.maxOrNull() == Constants.MODEL_INPUT_SIZE)
-
-        tflite.runForMultipleInputsOutputs(arrayOf(input1, input2, input3), output)
-
-        //translate 1st output to activity string.
-        var output1 = (output[0] as IntBuffer).get(0)
-        var output2 = (output[1] as IntBuffer).get(0)
-
-        val breathing = when (output1) {
+    private fun breathingName(id: Int): String {
+        return when (id) {
             0 -> "normal"
             1 -> "coughing"
             2 -> "hyperventilating"
             3 -> "Laughing/Singing/Talking/Eating"
             else -> "Invalid output"
         }
-        val activity = when (output2) {
+    }
+
+    private fun activityName(id: Int): String {
+        return when (id) {
             0 -> "ascending stairs"
             1 -> "descending stairs"
             2 -> "lying down back"
@@ -285,7 +258,66 @@ class LiveDataActivity : AppCompatActivity() {
             10 -> "Stationary"
             else -> "Invalid output"
         }
-        
+    }
+
+    private fun analyseData() {
+        // do analysis using tflite model
+
+        //Generate fourier transformed data
+        val fourierTransform = fftAmplitude(respeckBuffer)
+
+        //Generate differentials
+        val differentials = differential(respeckBuffer)
+
+        val input1 = FloatBuffer.allocate(respeckBuffer.size * respeckBuffer[0].size)
+        val input2 = FloatBuffer.allocate(fourierTransform.size * fourierTransform[0].size)
+        val input3 = FloatBuffer.allocate(differentials.size * differentials[0].size)
+
+
+        for (fa in respeckBuffer)
+            input1.put(fa)
+
+        for (fa in fourierTransform)
+            input2.put(fa)
+
+        for (fa in differentials)
+            input3.put(fa)
+
+        /*
+
+        for (j in respeckBuffer[0].indices)
+            for (i in respeckBuffer.indices) {
+                input1.put(respeckBuffer[i][j])
+                input2.put(fourierTransform[i][j])
+                input3.put(differentials[i][j])
+            }
+
+        */
+
+        input1.rewind()
+        input2.rewind()
+        input3.rewind()
+
+        val output = HashMap<Int, Any>()
+
+        output[0] = FloatBuffer.allocate(4)
+        output[1] = FloatBuffer.allocate(11)
+
+        tflite.runForMultipleInputsOutputs(arrayOf(input1, input2, input3), output)
+
+        //translate 1st output to activity string.
+        val output1 = Utils.maxIndex(output[0] as FloatBuffer)
+        val output2 = Utils.maxIndex(output[1] as FloatBuffer)
+
+        val breathing = breathingName(output1)
+        val activity = activityName(output2)
+
+        for (i in 0..3)
+            println("Probability of ${breathingName(i)}: ${(output[0] as FloatBuffer).get(i)}")
+
+        for (i in 0..10)
+            println("Probability of ${activityName(i)}: ${(output[1] as FloatBuffer).get(i)}")
+
         updateText(breathing,activity)
     }
 
@@ -343,6 +375,23 @@ class LiveDataActivity : AppCompatActivity() {
         return result
     }
 
+    private fun fftAmplitude(input: Array<FloatArray>): Array<FloatArray> {
+        val transformer = FastFourierTransformer(DftNormalization.STANDARD)
+        val output = Array(input.size) { FloatArray(input[0].size) }
+
+        for (column in input[0].indices) {
+            val fftInput = DoubleArray(Integer.highestOneBit(input.size - 1) * 2)
+                { if (it < input.size) input[it][column].toDouble() else 0.0 }
+
+            val fftOutput = transformer.transform(fftInput, TransformType.FORWARD)
+
+            for (row in output.indices)
+                output[row][column] = fftOutput[row].abs().toFloat()
+        }
+
+        return output
+    }
+
     private fun differential(input: Array<FloatArray>): Array<FloatArray> {
         val output = Array(input.size) { FloatArray(6) }
 
@@ -385,8 +434,6 @@ class LiveDataActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         unregisterReceiver(respeckAnalysisReceiver)
-        looperRespeck.quit()
-        looperThingy.quit()
         looperAnalysis.quit()
     }
 

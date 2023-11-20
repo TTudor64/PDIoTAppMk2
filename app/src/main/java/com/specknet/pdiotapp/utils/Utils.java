@@ -12,6 +12,7 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.nio.FloatBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.concurrent.TimeUnit;
@@ -121,6 +122,15 @@ public class Utils {
         return new float[]{accel_x, accel_y, accel_z, gyro_x, gyro_y, gyro_z, mag_x, mag_y, mag_z};
     }
 
+    public static int maxIndex(FloatBuffer buf) {
+        int maxIndex = -1;
+        float maxValue = Float.MIN_VALUE;
 
+        for (int i = 0; i < buf.limit(); i++)
+            if (buf.get(i) > maxValue)
+                maxValue = buf.get(maxIndex = i);
+
+        return maxIndex;
+    }
 
 }
