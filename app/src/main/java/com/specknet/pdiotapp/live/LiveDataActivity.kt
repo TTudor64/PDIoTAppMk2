@@ -321,7 +321,7 @@ class LiveDataActivity : AppCompatActivity() {
         val fourierTransform = fftAmplitude(respeckBuffer)
 
         //Generate differentials
-        val differentials = createDerivative(respeckBuffer, Constants.DERIVATIVE_SMOOTHING)
+        val differentials = differential(respeckBuffer)
 
 
         println("Untransformed Raw Data: ${respeckBuffer.contentDeepToString()}")
