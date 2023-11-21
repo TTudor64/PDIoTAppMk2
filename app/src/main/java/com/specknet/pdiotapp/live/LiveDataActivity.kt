@@ -30,7 +30,9 @@ import java.io.FileInputStream
 import java.nio.FloatBuffer
 import java.nio.MappedByteBuffer
 import java.nio.channels.FileChannel
+import kotlin.math.absoluteValue
 import kotlin.math.atan2
+import kotlin.math.sign
 
 
 class LiveDataActivity : AppCompatActivity() {
@@ -284,6 +286,26 @@ class LiveDataActivity : AppCompatActivity() {
         val entries_thingy_accel_z = ArrayList<Entry>()
     }
 
+    private fun stationaryPoseId(x: Double, y: Double, z: Double): Int {
+        val max = x.absoluteValue.coerceAtLeast(y.absoluteValue).coerceAtLeast(z.absoluteValue)
+        return (if (x.absoluteValue == max)
+                    x.sign
+                else if (y.absoluteValue == max)
+                    2 * y.sign
+                else
+                    3 * z.sign).toInt()
+    }
+
+    private fun poseName(id: Int): String {
+        // TODO: Figure out what id is what pose
+        return "Stationary pose $id"
+    }
+
+    private fun isStationaryOutput(id: Int): Boolean {
+        // TODO: Once classes are merged, calls to this should be replaced with a constant comparison
+        return id in 2..5 || id == 10
+    }
+
     private fun breathingName(id: Int): String {
         println("Output1 is : $id ")
         return when (id) {
@@ -330,7 +352,6 @@ class LiveDataActivity : AppCompatActivity() {
         val input1 = FloatBuffer.allocate(respeckBuffer.size * respeckBuffer[0].size)
         val input2 = FloatBuffer.allocate(fourierTransform.size * fourierTransform[0].size)
         val input3 = FloatBuffer.allocate(differentials.size * differentials[0].size)
-
 
         var count = 0
         for (fa in respeckBuffer) {
@@ -408,7 +429,13 @@ class LiveDataActivity : AppCompatActivity() {
         val output2 = Utils.maxIndex(output[1] as FloatBuffer)
 
         val breathing = breathingName(output1)
-        val activity = activityName(output2)
+        val activity = if (isStationaryOutput(output2)) {
+            val xa = respeckBuffer.sumOf { it[0].toDouble() }
+            val ya = respeckBuffer.sumOf { it[1].toDouble() }
+            val za = respeckBuffer.sumOf { it[2].toDouble() }
+            poseName(stationaryPoseId(xa, ya, za))
+        } else
+            activityName(output2)
 
         for (i in 0..3)
             println("Probability of ${breathingName(i)}: ${(output[0] as FloatBuffer).get(i)}")
@@ -416,7 +443,7 @@ class LiveDataActivity : AppCompatActivity() {
         for (i in 0..10)
             println("Probability of ${activityName(i)}: ${(output[1] as FloatBuffer).get(i)}")
 
-        updateText(breathing,activity)
+        updateText(breathing, activity)
         println("Analysis time: ${System.currentTimeMillis() - timeStart} ms")
     }
 
@@ -453,28 +480,6 @@ class LiveDataActivity : AppCompatActivity() {
                 respeckChart.moveViewToX(respeckChart.lowestVisibleX + 40)
             }
         }
-
-
-
-    }
-
-
-    private fun fftAmplitudeAndPhase(input: Array<FloatArray>): Array<Array<Pair<Double, Double>>> {
-        val transformer = FastFourierTransformer(DftNormalization.STANDARD)
-        val result = Array(input[0].size) { Array(input.size) { Pair(0.0, 0.0) } }
-
-        for (i in 0 until input[0].size) {
-            val doubleArray = input.map { it[i].toDouble() }.toDoubleArray()
-            val complexResult = transformer.transform(doubleArray, TransformType.FORWARD)
-
-            for (j in complexResult.indices) {
-                val amplitude = complexResult[j].abs()
-                val phase = atan2(complexResult[j].imaginary, complexResult[j].real)
-                result[i][j] = Pair(amplitude, phase)
-            }
-        }
-
-        return result
     }
 
     private fun fftAmplitude(input: Array<FloatArray>): Array<FloatArray> {
@@ -555,66 +560,9 @@ class LiveDataActivity : AppCompatActivity() {
         }
     }
 
-    fun extendStartEnd(mat: Array<FloatArray>, start: Int, end: Int): Array<FloatArray> {
-        val extended = ArrayList<FloatArray>()
-
-        // Extend start
-        for (i in 0 until start) {
-            extended.add(mat.first().clone())
-        }
-
-        // Original matrix
-        extended.addAll(mat)
-
-        // Extend end
-        for (i in 0 until end) {
-            extended.add(mat.last().clone())
-        }
-
-        return extended.toTypedArray()
-    }
-
-    fun smooth(mat: Array<FloatArray>, smoothing: Int): Array<FloatArray> {
-        val total = Array(mat.size) { FloatArray(mat[0].size) }
-
-        for (i in -smoothing..smoothing) {
-            val shift = extendStartEnd(mat, i + smoothing, smoothing - i)
-            for (row in smoothing until shift.size - smoothing) {
-                for (col in shift[row].indices) {
-                    total[row - smoothing][col] += shift[row][col]
-                }
-            }
-        }
-
-        val divisor = (2 * smoothing + 1).toFloat()
-        for (row in total.indices) {
-            for (col in total[row].indices) {
-                total[row][col] /= divisor
-            }
-        }
-
-        return total
-    }
-
-    fun createDerivative(mat: Array<FloatArray>, smoothing: Int): Array<FloatArray> {
-        val smoothed = smooth(mat, smoothing)
-        val derivative = Array(mat.size - 1) { FloatArray(mat[0].size) }
-
-        for (i in derivative.indices) {
-            for (j in derivative[i].indices) {
-                derivative[i][j] = smoothed[i + 1][j] - smoothed[i][j]
-            }
-        }
-
-        return derivative
-    }
-
     override fun onDestroy() {
         super.onDestroy()
         unregisterReceiver(respeckAnalysisReceiver)
         looperAnalysis.quit()
     }
-
-
-
 }
