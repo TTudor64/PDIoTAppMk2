@@ -493,12 +493,24 @@ class LiveDataActivity : AppCompatActivity() {
             multiplyBy(output[i], 1f / (2 * Constants.DERIVATIVE_SMOOTHING + 1));
         }
 
+        for (i in 1 until input.size) {
+            subtractFrom(output[i], output[i - 1])
+        }
+
+        multiplyBy(output[0], 0f)
+
         return output
     }
 
     private fun addTo(modify: FloatArray, other: FloatArray) {
         for (i in modify.indices) {
             modify[i] += other[i]
+        }
+    }
+
+    private fun subtractFrom(modify: FloatArray, other: FloatArray) {
+        for (i in modify.indices) {
+            modify[i] -= other[i]
         }
     }
 
