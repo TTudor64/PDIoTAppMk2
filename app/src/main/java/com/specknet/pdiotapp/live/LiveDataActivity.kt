@@ -302,8 +302,7 @@ class LiveDataActivity : AppCompatActivity() {
     }
 
     private fun isStationaryOutput(id: Int): Boolean {
-        // TODO: Once classes are merged, calls to this should be replaced with a constant comparison
-        return id in 2..5 || id == 10
+        return id == 2 || id == 7
     }
 
     private fun breathingName(id: Int): String {
@@ -322,15 +321,15 @@ class LiveDataActivity : AppCompatActivity() {
         return when (id) {
             0 -> "ascending stairs"
             1 -> "descending stairs"
-            2 -> "lying down back"
+            /*2 -> "lying down back"
             3 -> "lying down on left"
             4 -> "lying down on right"
-            5 -> "lying down on stomach"
-            6 -> "miscellaneous movements"
-            7 -> "normal walking"
-            8 -> "running"
-            9 -> "shuffle walking"
-            10 -> "Stationary"
+            5 -> "lying down on stomach"*/
+            3 -> "miscellaneous movements"
+            4 -> "normal walking"
+            5 -> "running"
+            6 -> "shuffle walking"
+            //10 -> "Stationary"
             else -> "Invalid output"
         }
     }
