@@ -86,10 +86,10 @@ class LiveDataActivity : AppCompatActivity() {
             // do analysis
             //Log.d("Live", "onReceive: analysis time")
             analyseData()
-            buffertime /= 2
+            buffertime /= 3
             //empty buffer
 
-            shiftBufferArray()
+            //shiftBufferArray()
         }
     }
 
@@ -287,10 +287,10 @@ class LiveDataActivity : AppCompatActivity() {
     private fun breathingName(id: Int): String {
         println("Output1 is : $id ")
         return when (id) {
+            0 -> "Other Breathing"
             1 -> "Normal Breathing"
             2 -> "Coughing"
             3 -> "Hyperventilating"
-            0 -> "Laughing/Singing/Talking/Eating"
             else -> "Invalid output"
         }
     }
@@ -509,8 +509,8 @@ class LiveDataActivity : AppCompatActivity() {
     }
 
     private fun shiftBufferArray() {
-        for (i in 0 until respeckBuffer.size/2) {
-            respeckBuffer[i] = respeckBuffer[i + respeckBuffer.size/2]
+        for (i in 0 until respeckBuffer.size/3) {
+            respeckBuffer[i] = respeckBuffer[i + (respeckBuffer.size/3) * 2]
         }
     }
 
