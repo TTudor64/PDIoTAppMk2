@@ -512,7 +512,7 @@ class LiveDataActivity : AppCompatActivity() {
             multiplyBy(output[i], 1f / (2 * Constants.DERIVATIVE_SMOOTHING + 1));
         }
 
-        for (i in 1 until input.size) {
+        for (i in (input.size - 1) downTo 1) {
             subtractFrom(output[i], output[i - 1])
         }
 
