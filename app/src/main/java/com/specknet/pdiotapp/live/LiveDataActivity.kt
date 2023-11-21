@@ -89,7 +89,7 @@ class LiveDataActivity : AppCompatActivity() {
             buffertime /= 3
             //empty buffer
 
-            //shiftBufferArray()
+            shiftBufferArray()
         }
     }
 
@@ -321,8 +321,12 @@ class LiveDataActivity : AppCompatActivity() {
         val fourierTransform = fftAmplitude(respeckBuffer)
 
         //Generate differentials
-        val differentials = differential(respeckBuffer)
+        val differentials = createDerivative(respeckBuffer, Constants.DERIVATIVE_SMOOTHING)
 
+
+        println("Untransformed Raw Data: ${respeckBuffer.contentDeepToString()}")
+        println("Untransformed FT Data: ${fourierTransform.contentDeepToString()}")
+        println("Untransformed Differential Data: ${differentials.contentDeepToString()}")
         val input1 = FloatBuffer.allocate(respeckBuffer.size * respeckBuffer[0].size)
         val input2 = FloatBuffer.allocate(fourierTransform.size * fourierTransform[0].size)
         val input3 = FloatBuffer.allocate(differentials.size * differentials[0].size)
@@ -348,8 +352,9 @@ class LiveDataActivity : AppCompatActivity() {
             count++
         }
 
-
         count = 0
+        //Removed till model is fixed
+
         for (fa in differentials) {
             var tmpArray = FloatArray(6)
             for (i in fa.indices) {
@@ -361,7 +366,11 @@ class LiveDataActivity : AppCompatActivity() {
             input3.put(tmpArray)
             count++
         }
-
+        /*
+        for (fa in differentials){
+            input3.put(0f)
+        }
+        */
 
 
         /*
@@ -382,6 +391,16 @@ class LiveDataActivity : AppCompatActivity() {
         output[0] = FloatBuffer.allocate(4)
         output[1] = FloatBuffer.allocate(11)
 
+        println("Raw Input: ${input1.array().contentToString()}")
+        println("Raw Input Size: ${input1.array().size}")
+        println("FT Input: ${input2.array().contentToString()}, Size = ${input2.array().size}")
+        println("FT Input Size: ${input2.array().size}")
+        println("Differential Input: ${input3.array().contentToString()}, Size = ${input3.array().size}")
+        println("Differential Input Size: ${input3.array().size}")
+
+        input1.rewind()
+        input2.rewind()
+        input3.rewind()
         tflite.runForMultipleInputsOutputs(arrayOf(input1, input2, input3), output)
 
         //translate 1st output to activity string.
@@ -522,6 +541,60 @@ class LiveDataActivity : AppCompatActivity() {
         else {
             return (x - mean) / std
         }
+    }
+
+    fun extendStartEnd(mat: Array<FloatArray>, start: Int, end: Int): Array<FloatArray> {
+        val extended = ArrayList<FloatArray>()
+
+        // Extend start
+        for (i in 0 until start) {
+            extended.add(mat.first().clone())
+        }
+
+        // Original matrix
+        extended.addAll(mat)
+
+        // Extend end
+        for (i in 0 until end) {
+            extended.add(mat.last().clone())
+        }
+
+        return extended.toTypedArray()
+    }
+
+    fun smooth(mat: Array<FloatArray>, smoothing: Int): Array<FloatArray> {
+        val total = Array(mat.size) { FloatArray(mat[0].size) }
+
+        for (i in -smoothing..smoothing) {
+            val shift = extendStartEnd(mat, i + smoothing, smoothing - i)
+            for (row in smoothing until shift.size - smoothing) {
+                for (col in shift[row].indices) {
+                    total[row - smoothing][col] += shift[row][col]
+                }
+            }
+        }
+
+        val divisor = (2 * smoothing + 1).toFloat()
+        for (row in total.indices) {
+            for (col in total[row].indices) {
+                total[row][col] /= divisor
+            }
+        }
+
+        return total
+    }
+
+    fun createDerivative(mat: Array<FloatArray>, smoothing: Int): Array<FloatArray> {
+        val smoothed = smooth(mat, smoothing)
+        val derivative = Array(mat.size - 1) { FloatArray(mat[0].size) }
+
+        for (i in derivative.indices) {
+            for (j in derivative[i].indices) {
+                derivative[i][j] = smoothed[i + 1][j] - smoothed[i][j]
+            }
+        }
+
+        return derivative
     }
 
     override fun onDestroy() {
